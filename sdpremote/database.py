@@ -24,3 +24,8 @@ convention = {
 }
 
 metadata = sa.MetaData(naming_convention=convention)
+
+repos_table = sa.Table(
+    'repos', metadata,
+    sa.Column('name', sa.Text, primary_key=True)
+)
