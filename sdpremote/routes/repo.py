@@ -1,5 +1,5 @@
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status, Path
 from fastapi.responses import PlainTextResponse
 
 from ..database import engine, repos_table
@@ -8,7 +8,7 @@ from ..user import user
 router = APIRouter(tags=['repo'])
 
 
-def repo_name(user: str = Depends(user), repo: str = Query(...)) -> str:
+def repo_name(user: str = Depends(user), repo: str = Path(...)) -> str:
     return f'{user}/{repo}'
 
 

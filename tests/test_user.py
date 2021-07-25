@@ -1,7 +1,7 @@
 from base64 import b64encode
 
 import pytest
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from sdpremote.user import user
@@ -11,14 +11,10 @@ from sdpremote.user import user
 def app() -> FastAPI:
     app = FastAPI()
 
-    def index(login: str = Depends(user)):
+    def user_check(login: str = Depends(user)):
         return login
 
-    def user_check(user: str = Query(...), _login: str = Depends(user)):
-        _login  # to disable lsp warning
-        return user
-
-    app.get('/')(index)
+    app.get('/')(user_check)
     app.get('/{user}')(user_check)
 
     return app
