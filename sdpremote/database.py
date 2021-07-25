@@ -30,3 +30,22 @@ repos_table = sa.Table(
     metadata,
     sa.Column('name', sa.Text, primary_key=True),
 )
+
+scopes_table = sa.Table(
+    'scopes',
+    metadata,
+    sa.Column('name', sa.Text, nullable=False),
+    sa.Column(
+        'repo',
+        sa.ForeignKey(
+            'repos.name',
+            onupdate='CASCADE',
+            ondelete='CASCADE',
+        ),
+        nullable=False,
+    ),
+    sa.PrimaryKeyConstraint('name', 'repo'),
+    sa.Column('checksum', sa.String(64), nullable=True),
+    sa.Column('creator', sa.Text, nullable=True),
+    sa.Column('timestamp', sa.DateTime, nullable=True),
+)

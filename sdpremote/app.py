@@ -4,7 +4,7 @@ from sqlalchemy.sql import text
 from . import __version__
 from .config import settings
 from .database import engine
-from .routes import repo
+from .routes import repo, scope
 
 app = FastAPI(version=__version__)
 
@@ -26,3 +26,4 @@ async def close_engine():
 
 
 app.include_router(repo.router)
+app.include_router(scope.router)
