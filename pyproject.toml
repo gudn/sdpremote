@@ -16,6 +16,8 @@ asyncpg = "^0.23.0"
 pytest = "^5.2"
 requests = "^2.26.0"
 sqlalchemy-stubs = "^0.4"
+pg8000 = "^1.20.0"
+alembic = "^1.6.5"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
