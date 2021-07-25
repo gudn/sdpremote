@@ -3,3 +3,5 @@ __pycache__/
 
 .projectile
 .dir-locals.el
+
+.secrets.*
