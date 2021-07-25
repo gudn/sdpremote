@@ -9,10 +9,13 @@ python = "^3.9"
 uvicorn = "^0.14.0"
 fastapi = "^0.67.0"
 dynaconf = "^3.1.4"
+SQLAlchemy = "^1.4.22"
+asyncpg = "^0.23.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
 requests = "^2.26.0"
+sqlalchemy-stubs = "^0.4"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
