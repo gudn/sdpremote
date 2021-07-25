@@ -4,6 +4,7 @@ from sqlalchemy.sql import text
 from . import __version__
 from .config import settings
 from .database import engine
+from .routes import repo
 
 app = FastAPI(version=__version__)
 
@@ -22,3 +23,6 @@ async def check_engine():
 @app.on_event('shutdown')
 async def close_engine():
     await engine.dispose()
+
+
+app.include_router(repo.router)
