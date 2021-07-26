@@ -1,6 +1,9 @@
+import asyncio
 import threading
 import time
+from tempfile import SpooledTemporaryFile
 from datetime import datetime
+from fastapi.datastructures import UploadFile
 
 import minio
 from minio.deleteobjects import DeleteObject
@@ -19,7 +22,7 @@ if not any(b.name == 'sdpremote' for b in _buckets):
 
 class SThread(threading.Thread):
     event = threading.Event()
-    interval =  3 * 3600  # sleep interval in seconds
+    interval = 3 * 3600  # sleep interval in seconds
 
     @classmethod
     def stop(cls):
@@ -61,3 +64,17 @@ def delete_expired():
 
 
 schedule.every(6).hours.do(delete_expired)
+
+
+async def uploadObject(sid: int, obj: UploadFile):
+    f: SpooledTemporaryFile = obj.file
+    f.seek(0, 2)
+    size = f.tell()
+    f.seek(0)
+    await asyncio.to_thread(
+        storage.put_object,
+        'sdpremote',
+        str(sid),
+        obj.file,
+        size,
+    )
