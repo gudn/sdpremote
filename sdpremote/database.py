@@ -62,3 +62,30 @@ storage_table = sa.Table(
         server_default=sa.text("current_timestamp + interval '6 hour'"),
     ),
 )
+
+objects_table = sa.Table(
+    'objects',
+    metadata,
+    sa.Column('key', sa.Text, nullable=False),
+    sa.Column('name', sa.Text, nullable=False),
+    sa.Column('repo', sa.Text, nullable=False),
+    sa.ForeignKeyConstraint(
+        ['name', 'repo'],
+        ['scopes.name', 'scopes.repo'],
+        onupdate='CASCADE',
+        ondelete='CASCADE',
+    ),
+    sa.PrimaryKeyConstraint('key', 'name', 'repo'),
+    sa.Column('checksum', sa.String(64), nullable=True),
+    sa.Column('creator', sa.Text, nullable=False),
+    sa.Column('timestamp', sa.DateTime, nullable=False),
+    sa.Column(
+        'data',
+        sa.ForeignKey(
+            'storage.id',
+            onupdate='CASCADE',
+            ondelete='RESTRICT',
+        ),
+        nullable=True,
+    ),
+)
