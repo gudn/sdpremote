@@ -62,6 +62,7 @@ storage_table = sa.Table(
         server_default=sa.text("current_timestamp + interval '6 hour'"),
     ),
     sa.Column('owner', sa.Text, nullable=False),
+    sa.Column('checksum', sa.String(64), nullable=True),
 )
 
 objects_table = sa.Table(

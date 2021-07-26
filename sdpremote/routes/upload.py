@@ -25,9 +25,15 @@ async def upload(obj: UploadFile = File(...), username: str = Depends(user)):
     async with engine.begin() as conn:
         result = await conn.execute(query)
         sid: Optional[int] = result.scalar()
+        if not sid:
+            raise HTTPException(
+                status.HTTP_507_INSUFFICIENT_STORAGE,
+                'Cannot create storage entry',
+            )
+        h = await uploadObject(sid, obj)
+        query = sa.update(storage_table)\
+            .where(storage_table.c.id == sid)\
+            .values(checksum=h)
+        await conn.execute(query)
         await conn.commit()
-    if not sid:
-        raise HTTPException(status.HTTP_507_INSUFFICIENT_STORAGE,
-                            'Cannot create storage entry')
-    await uploadObject(sid, obj)
     return Uploaded(sid=sid)

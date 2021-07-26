@@ -1,6 +1,7 @@
 import asyncio
 import threading
 import time
+import hashlib
 from tempfile import SpooledTemporaryFile
 from datetime import datetime
 from fastapi.datastructures import UploadFile
@@ -66,15 +67,32 @@ def delete_expired():
 schedule.every(6).hours.do(delete_expired)
 
 
-async def uploadObject(sid: int, obj: UploadFile):
-    f: SpooledTemporaryFile = obj.file
-    f.seek(0, 2)
-    size = f.tell()
-    f.seek(0)
+async def uploadObject(sid: int, obj: UploadFile) -> str:
+    reader = ObjectReader(obj.file)
     await asyncio.to_thread(
         storage.put_object,
         'sdpremote',
         str(sid),
-        obj.file,
-        size,
+        reader,
+        reader.size,
     )
+    return reader.hash
+
+
+class ObjectReader:
+    def __init__(self, f: SpooledTemporaryFile):
+        f.seek(0, 2)
+        self.size = f.tell()
+        f.seek(0)
+        self.f = f
+        self.h = hashlib.sha256()
+
+    def read(self, size: int):
+        content: bytes = self.f.read(size)
+        if content:
+            self.h.update(content)
+        return content
+
+    @property
+    def hash(self) -> str:
+        return self.h.hexdigest()
