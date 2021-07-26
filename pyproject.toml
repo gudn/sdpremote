@@ -11,6 +11,7 @@ fastapi = "^0.67.0"
 dynaconf = "^3.1.4"
 SQLAlchemy = "^1.4.22"
 asyncpg = "^0.23.0"
+minio = "^7.1.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
