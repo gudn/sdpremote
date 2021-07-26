@@ -4,6 +4,7 @@ from sqlalchemy.sql import text
 from . import __version__
 from .config import settings
 from .database import engine
+from .storage import SThread
 from .routes import repo, scope
 
 settings.validators.validate()  # type: ignore
@@ -24,6 +25,16 @@ async def check_engine():
 @app.on_event('shutdown')
 async def close_engine():
     await engine.dispose()
+
+
+@app.on_event('startup')
+def start_sthread():
+    SThread().start()
+
+
+@app.on_event('shutdown')
+def close_sthread():
+    SThread.event.set()
 
 
 app.include_router(repo.router)
