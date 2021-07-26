@@ -6,6 +6,7 @@ from .config import settings
 from .database import engine
 from .routes import repo, scope
 
+settings.validators.validate()  # type: ignore
 app = FastAPI(version=__version__)
 
 
