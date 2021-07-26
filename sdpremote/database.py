@@ -61,6 +61,7 @@ storage_table = sa.Table(
         index=True,
         server_default=sa.text("current_timestamp + interval '6 hour'"),
     ),
+    sa.Column('owner', sa.Text, nullable=False),
 )
 
 objects_table = sa.Table(
