@@ -49,3 +49,16 @@ scopes_table = sa.Table(
     sa.Column('creator', sa.Text, nullable=True),
     sa.Column('timestamp', sa.DateTime, nullable=True),
 )
+
+storage_table = sa.Table(
+    'storage',
+    metadata,
+    sa.Column('id', sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column(
+        'expire_at',
+        sa.DateTime,
+        nullable=True,
+        index=True,
+        server_default=sa.text("current_timestamp + interval '6 hour'"),
+    ),
+)
