@@ -40,22 +40,36 @@ async def create_object(
                 .returning(storage_table.c.checksum, storage_table.c.owner)
         )
         if result.rowcount != 1:
-            raise HTTPException(status.HTTP_404_NOT_FOUND,
-                                'storage object not found')
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                'storage object not found',
+            )
         checksum, owner = result.one()
         if owner != user:
             raise HTTPException(status.HTTP_403_FORBIDDEN)
 
-    await conn.execute(
-        sa.insert(objects_table).values(
-            key=path.key,
-            name=path.scope,
-            repo=path.repo,
+    query = sa.dialects.postgresql.insert(objects_table).values(
+        key=path.key,
+        name=path.scope,
+        repo=path.repo,
+        checksum=checksum,
+        creator=extra.creator,
+        timestamp=extra.timestamp,
+        data=sid,
+    ).on_conflict_do_update(
+        index_elements=[
+            objects_table.c.key,
+            objects_table.c.name,
+            objects_table.c.repo,
+        ],
+        set_=dict(
             checksum=checksum,
             creator=extra.creator,
             timestamp=extra.timestamp,
             data=sid,
-        ))
+        ),
+    )
+    await conn.execute(query)
 
     await trx.commit()
 
@@ -96,5 +110,3 @@ async def set_scope(
                 .where(scopes_table.c.repo == repo)\
                 .values(checksum=checksum)
         )
-
-

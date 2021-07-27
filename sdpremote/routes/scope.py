@@ -1,3 +1,5 @@
+import operator
+from enum import Enum
 from datetime import datetime
 from typing import Any, Optional, Union
 
@@ -9,24 +11,39 @@ from starlette.responses import PlainTextResponse
 from ..database import engine, scopes_table, objects_table
 from ..entities.scope import Scope
 from ..user import user
-from ..utils.scope import set_scope
+from ..utils.scope import calc_checksum, set_scope, create_object, ObjectPath, ObjectExtra
 from .repo import repo_name
 
 router = APIRouter(tags=['scope'])
+_secondGetter = operator.itemgetter(1)
 
 
-class ScopeNew(BaseModel):
+class Action(str, Enum):
+    delete = 'delete'
+
+
+class _ScopeBase(BaseModel):
     creator_suffix: str = ''
-    objects: dict[str, Union[int, None]] = Field(
-        {},
-        description='Mapping object key to SID or `null`',
-    )
 
     def use_suffix(self, username: str) -> str:
         suffix = self.creator_suffix.strip()
         if suffix:
             return f'{username}@{suffix}'
         return username
+
+
+class ScopeNew(_ScopeBase):
+    objects: dict[str, Union[int, None]] = Field(
+        dict(),
+        description='Mapping object key to SID or `null`',
+    )
+
+
+class ScopePatch(_ScopeBase):
+    objects: dict[str, Union[int, None, Action]] = Field(
+        dict(),
+        description='Mapping object key to SID (for replace/create), `null`'
+        '(to set `null`) or to `"delete"` for deleting key')
 
 
 @router.get(
@@ -101,6 +118,7 @@ async def create_scope(
 
 @router.put(
     '/{user}/{repo}/{scope}',
+    status_code=status.HTTP_205_RESET_CONTENT,
     response_class=PlainTextResponse,
     responses={
         status.HTTP_404_NOT_FOUND: {
@@ -121,7 +139,7 @@ async def replace_scope(
     timestamp = datetime.utcnow() if scopeInput.objects else None
     creator = scopeInput.use_suffix(username) if scopeInput.objects else None
     async with engine.begin() as conn:
-        result: Any= await conn.execute(
+        result: Any = await conn.execute(
             sa.update(scopes_table)\
                 .where(scopes_table.c.name == scope)\
                 .where(scopes_table.c.repo == repo_name)\
@@ -151,3 +169,88 @@ async def replace_scope(
             )
         await conn.commit()
     return 'updated'
+
+
+@router.patch(
+    '/{user}/{repo}/{scope}',
+    status_code=status.HTTP_202_ACCEPTED,
+    response_class=PlainTextResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            'description': 'Something is not found or invalid checksum'
+        },
+        status.HTTP_204_NO_CONTENT: {
+            'description': 'No changes was provided in requiest'
+        }
+    },
+)
+async def patch_scope(
+        scopeInput: ScopePatch,
+        checksum: Optional[str] = Query(
+            None,
+            description='checksum of current scope state',
+        ),
+        repo_name: str = Depends(repo_name),
+        scope: str = Path(...),
+        username: str = Depends(user),
+):
+    if not scopeInput.objects:
+        raise HTTPException(status.HTTP_204_NO_CONTENT)
+    extra = ObjectExtra(creator=scopeInput.use_suffix(username),
+                        timestamp=datetime.utcnow())
+    async with engine.begin() as conn:
+        result: Any = await conn.execute(
+            sa.update(scopes_table)\
+                .where(scopes_table.c.name == scope)\
+                .where(scopes_table.c.repo == repo_name)\
+                .where(scopes_table.c.checksum == checksum)\
+                .values(
+                    timestamp=None,
+                    creator=None,
+                    checksum=None,
+                )
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status.HTTP_404_NOT_FOUND)
+        checksums: dict[str, str] = {}
+        result = await conn.execute(
+            sa.select([objects_table.c.key, objects_table.c.checksum])\
+                .where(objects_table.c.name == scope)\
+                .where(objects_table.c.repo == repo_name)
+        )
+        for key, checksum in result:
+            checksums[key] = f'{key} ' + (checksum if checksum else 'null') # type: ignore
+        to_delete: list[str] = []
+        for key, value in scopeInput.objects.items():
+            if value == Action.delete:
+                to_delete.append(key)
+                del checksums[key]
+                continue
+            checksums[key] = await create_object(
+                ObjectPath(key=key, scope=scope, repo=repo_name),
+                value,
+                extra,
+                username,
+                conn
+            )
+        if to_delete:
+            await conn.execute(
+                sa.delete(objects_table)\
+                    .where(objects_table.c.name == scope)\
+                    .where(objects_table.c.repo == repo_name)\
+                    .where(objects_table.c.key.in_(to_delete))
+            )
+        if checksums:
+            checksum = calc_checksum(map(_secondGetter, sorted(checksums.items())))
+            await conn.execute(
+                sa.update(scopes_table)\
+                    .where(scopes_table.c.name == scope)\
+                    .where(scopes_table.c.repo == repo_name)\
+                    .values(
+                        checksum=checksum,
+                        creator=extra.creator,
+                        timestamp=extra.timestamp
+                    )
+            )
+        await conn.commit()
+    return 'patched'
