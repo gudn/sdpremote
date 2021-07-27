@@ -47,7 +47,6 @@ def user(
         user: Optional[str] = None,
         login: str = Depends(_user_header),
 ) -> str:
-    print(user)
     if user is not None and user != login:
         raise HTTPException(status.HTTP_403_FORBIDDEN)
     return login
