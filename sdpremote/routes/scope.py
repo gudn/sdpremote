@@ -62,6 +62,7 @@ async def list_scopes(
     if scope:
         if is_prefix:
             query = query.where(scopes_table.c.name.like(f'{scope}%'))
+
         else:
             query = query.where(scopes_table.c.name == scope)
     async with engine.connect() as conn:
@@ -219,7 +220,8 @@ async def patch_scope(
                 .where(objects_table.c.repo == repo_name)
         )
         for key, checksum in result:
-            checksums[key] = f'{key} ' + (checksum if checksum else 'null') # type: ignore
+            checksums[key] = f'{key} ' + (checksum if checksum else 'null'
+                                          )  # type: ignore
         to_delete: list[str] = []
         for key, value in scopeInput.objects.items():
             if value == Action.delete:
@@ -227,12 +229,8 @@ async def patch_scope(
                 del checksums[key]
                 continue
             checksums[key] = await create_object(
-                ObjectPath(key=key, scope=scope, repo=repo_name),
-                value,
-                extra,
-                username,
-                conn
-            )
+                ObjectPath(key=key, scope=scope, repo=repo_name), value, extra,
+                username, conn)
         if to_delete:
             await conn.execute(
                 sa.delete(objects_table)\
@@ -241,7 +239,8 @@ async def patch_scope(
                     .where(objects_table.c.key.in_(to_delete))
             )
         if checksums:
-            checksum = calc_checksum(map(_secondGetter, sorted(checksums.items())))
+            checksum = calc_checksum(
+                map(_secondGetter, sorted(checksums.items())))
             await conn.execute(
                 sa.update(scopes_table)\
                     .where(scopes_table.c.name == scope)\
@@ -254,3 +253,33 @@ async def patch_scope(
             )
         await conn.commit()
     return 'patched'
+
+
+@router.delete(
+    '/{user}/{repo}/{scope}',
+    response_class=PlainTextResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            'description': 'Something is not found or invalid checksum',
+        },
+    },
+)
+async def delete_scope(
+        checksum: Optional[str] = Query(
+            None,
+            description='checksum of current scope state',
+        ),
+        repo_name: str = Depends(repo_name),
+        scope: str = Path(...),
+):
+    async with engine.begin() as conn:
+        result = await conn.execute(
+            sa.delete(scopes_table)\
+                .where(scopes_table.c.name == scope)\
+                .where(scopes_table.c.repo == repo_name)\
+                .where(scopes_table.c.checksum == checksum)
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status.HTTP_404_NOT_FOUND)
+        await conn.commit()
+    return 'deleted'
