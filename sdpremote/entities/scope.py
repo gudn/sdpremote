@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -21,7 +22,7 @@ class Scope(BaseModel):
         description=
         'Creator of most recent object, `null` if no objects in scope',
     )
-    timestamp: Optional[str] = Field(
+    timestamp: Optional[datetime] = Field(
         None,
         description=
         'Milliseconds since epoch of most recent object, `null` if no objects in scope',
