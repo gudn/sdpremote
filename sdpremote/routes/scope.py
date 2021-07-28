@@ -43,7 +43,8 @@ class ScopePatch(_ScopeBase):
     objects: dict[str, Union[int, None, Action]] = Field(
         dict(),
         description='Mapping object key to SID (for replace/create), `null`'
-        '(to set `null`) or to `"delete"` for deleting key')
+        '(to set `null`) or to `"delete"` for deleting key',
+    )
 
 
 @router.get(
@@ -197,8 +198,10 @@ async def patch_scope(
 ):
     if not scopeInput.objects:
         raise HTTPException(status.HTTP_204_NO_CONTENT)
-    extra = ObjectExtra(creator=scopeInput.use_suffix(username),
-                        timestamp=datetime.utcnow())
+    extra = ObjectExtra(
+        creator=scopeInput.use_suffix(username),
+        timestamp=datetime.utcnow(),
+    )
     async with engine.begin() as conn:
         result: Any = await conn.execute(
             sa.update(scopes_table)\
@@ -220,8 +223,7 @@ async def patch_scope(
                 .where(objects_table.c.repo == repo_name)
         )
         for key, checksum in result:
-            checksums[key] = f'{key} ' + (checksum if checksum else 'null'
-                                          )  # type: ignore
+            checksums[key] = f'{key} ' + (checksum if checksum else 'null')
         to_delete: list[str] = []
         for key, value in scopeInput.objects.items():
             if value == Action.delete:
@@ -229,8 +231,12 @@ async def patch_scope(
                 del checksums[key]
                 continue
             checksums[key] = await create_object(
-                ObjectPath(key=key, scope=scope, repo=repo_name), value, extra,
-                username, conn)
+                ObjectPath(key=key, scope=scope, repo=repo_name),
+                value,
+                extra,
+                username,
+                conn,
+            )
         if to_delete:
             await conn.execute(
                 sa.delete(objects_table)\
@@ -240,7 +246,10 @@ async def patch_scope(
             )
         if checksums:
             checksum = calc_checksum(
-                map(_secondGetter, sorted(checksums.items())))
+                map(
+                    _secondGetter,
+                    sorted(checksums.items()),
+                ))
             await conn.execute(
                 sa.update(scopes_table)\
                     .where(scopes_table.c.name == scope)\
@@ -248,7 +257,7 @@ async def patch_scope(
                     .values(
                         checksum=checksum,
                         creator=extra.creator,
-                        timestamp=extra.timestamp
+                        timestamp=extra.timestamp,
                     )
             )
         await conn.commit()
