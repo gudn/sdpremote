@@ -156,7 +156,7 @@ async def replace_scope(
             raise HTTPException(status.HTTP_404_NOT_FOUND)
         await conn.execute(
             sa.delete(objects_table)\
-                .where(objects_table.c.name == scope)\
+                .where(objects_table.c.scope == scope)\
                 .where(objects_table.c.repo == repo_name)
         )
         if scopeInput.objects:
@@ -219,7 +219,7 @@ async def patch_scope(
         checksums: dict[str, str] = {}
         result = await conn.execute(
             sa.select([objects_table.c.key, objects_table.c.checksum])\
-                .where(objects_table.c.name == scope)\
+                .where(objects_table.c.scope == scope)\
                 .where(objects_table.c.repo == repo_name)
         )
         for key, checksum in result:
@@ -240,7 +240,7 @@ async def patch_scope(
         if to_delete:
             await conn.execute(
                 sa.delete(objects_table)\
-                    .where(objects_table.c.name == scope)\
+                    .where(objects_table.c.scope == scope)\
                     .where(objects_table.c.repo == repo_name)\
                     .where(objects_table.c.key.in_(to_delete))
             )

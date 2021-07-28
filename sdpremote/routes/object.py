@@ -30,7 +30,7 @@ async def list_objects(
         objects_table.c.checksum,
         objects_table.c.creator,
         objects_table.c.timestamp,
-    ]).where(objects_table.c.name == scope)\
+    ]).where(objects_table.c.scope == scope)\
         .where(objects_table.c.repo == repo_name)
     if key:
         if is_prefix:

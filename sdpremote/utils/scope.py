@@ -50,7 +50,7 @@ async def create_object(
 
     query = sa.dialects.postgresql.insert(objects_table).values(
         key=path.key,
-        name=path.scope,
+        scope=path.scope,
         repo=path.repo,
         checksum=checksum,
         creator=extra.creator,
@@ -59,7 +59,7 @@ async def create_object(
     ).on_conflict_do_update(
         index_elements=[
             objects_table.c.key,
-            objects_table.c.name,
+            objects_table.c.scope,
             objects_table.c.repo,
         ],
         set_=dict(
