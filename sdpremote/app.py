@@ -5,7 +5,7 @@ from . import __version__
 from .config import settings
 from .database import engine
 from .storage import SThread
-from .routes import repo, scope, upload
+from .routes import repo, scope, object, upload
 
 settings.validators.validate()  # type: ignore
 app = FastAPI(version=__version__)
@@ -39,4 +39,5 @@ def close_sthread():
 
 app.include_router(repo.router)
 app.include_router(scope.router)
+app.include_router(object.router)
 app.include_router(upload.router)
