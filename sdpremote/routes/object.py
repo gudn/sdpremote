@@ -20,7 +20,7 @@ router = APIRouter(tags=['object'])
     },
 )
 async def list_objects(
-        repo_name: str = Depends(repo_name),
+        repo: str = Depends(repo_name),
         scope: str = Path(...),
         key: Optional[str] = Query(None),
         is_prefix: bool = Query(True),
@@ -31,7 +31,7 @@ async def list_objects(
         objects_table.c.creator,
         objects_table.c.timestamp,
     ]).where(objects_table.c.scope == scope)\
-        .where(objects_table.c.repo == repo_name)
+        .where(objects_table.c.repo == repo)
     if key:
         if is_prefix:
             query = query.where(objects_table.c.key.like(f'{key}%'))

@@ -23,8 +23,8 @@ def repo_name(user: str = Depends(user), repo: str = Path(...)) -> str:
         }
     },
 )
-async def create_repo(repo_name: str = Depends(repo_name)) -> str:
-    query = sa.insert(repos_table).values(name=repo_name)
+async def create_repo(repo: str = Depends(repo_name)) -> str:
+    query = sa.insert(repos_table).values(name=repo)
     async with engine.begin() as conn:
         try:
             await conn.execute(query)
@@ -45,8 +45,8 @@ async def create_repo(repo_name: str = Depends(repo_name)) -> str:
         }
     },
 )
-async def delete_repo(repo_name: str = Depends(repo_name)) -> str:
-    query = sa.delete(repos_table).where(repos_table.c.name == repo_name)
+async def delete_repo(repo: str = Depends(repo_name)) -> str:
+    query = sa.delete(repos_table).where(repos_table.c.name == repo)
     async with engine.begin() as conn:
         result: int = (await conn.execute(query)).rowcount
         await conn.commit()

@@ -52,14 +52,14 @@ class ScopePatch(_ScopeBase):
     response_model=list[Scope],
 )
 async def list_scopes(
-        repo_name: str = Depends(repo_name),
+        repo: str = Depends(repo_name),
         scope: Optional[str] = Query(None),
         is_prefix: bool = Query(True),
 ) -> list[Scope]:
     query = sa.select([
         scopes_table.c.name, scopes_table.c.checksum, scopes_table.c.creator,
         scopes_table.c.timestamp
-    ]).where(scopes_table.c.repo == repo_name)
+    ]).where(scopes_table.c.repo == repo)
     if scope:
         if is_prefix:
             query = query.where(scopes_table.c.name.like(f'{scope}%'))
@@ -87,7 +87,7 @@ async def list_scopes(
 )
 async def create_scope(
         scopeInput: ScopeNew,
-        repo_name: str = Depends(repo_name),
+        repo: str = Depends(repo_name),
         scope: str = Path(...),
         username: str = Depends(user),
 ) -> str:
@@ -98,7 +98,7 @@ async def create_scope(
             await conn.execute(
                 sa.insert(scopes_table).values(
                     name=scope,
-                    repo=repo_name,
+                    repo=repo,
                     timestamp=timestamp,
                     creator=creator,
                 ))
@@ -107,7 +107,7 @@ async def create_scope(
         if scopeInput.objects:
             await set_scope(
                 scopeInput.objects,
-                repo_name,
+                repo,
                 scope,
                 username,
                 creator,  # type: ignore
@@ -134,7 +134,7 @@ async def replace_scope(
             None,
             description='checksum of current scope state',
         ),
-        repo_name: str = Depends(repo_name),
+        repo: str = Depends(repo_name),
         scope: str = Path(...),
         username: str = Depends(user),
 ):
@@ -144,7 +144,7 @@ async def replace_scope(
         result: Any = await conn.execute(
             sa.update(scopes_table)\
                 .where(scopes_table.c.name == scope)\
-                .where(scopes_table.c.repo == repo_name)\
+                .where(scopes_table.c.repo == repo)\
                 .where(scopes_table.c.checksum == checksum)\
                 .values(
                     timestamp=timestamp,
@@ -157,12 +157,12 @@ async def replace_scope(
         await conn.execute(
             sa.delete(objects_table)\
                 .where(objects_table.c.scope == scope)\
-                .where(objects_table.c.repo == repo_name)
+                .where(objects_table.c.repo == repo)
         )
         if scopeInput.objects:
             await set_scope(
                 scopeInput.objects,
-                repo_name,
+                repo,
                 scope,
                 username,
                 creator,  # type: ignore
@@ -192,7 +192,7 @@ async def patch_scope(
             None,
             description='checksum of current scope state',
         ),
-        repo_name: str = Depends(repo_name),
+        repo: str = Depends(repo_name),
         scope: str = Path(...),
         username: str = Depends(user),
 ):
@@ -206,7 +206,7 @@ async def patch_scope(
         result: Any = await conn.execute(
             sa.update(scopes_table)\
                 .where(scopes_table.c.name == scope)\
-                .where(scopes_table.c.repo == repo_name)\
+                .where(scopes_table.c.repo == repo)\
                 .where(scopes_table.c.checksum == checksum)\
                 .values(
                     timestamp=None,
@@ -220,7 +220,7 @@ async def patch_scope(
         result = await conn.execute(
             sa.select([objects_table.c.key, objects_table.c.checksum])\
                 .where(objects_table.c.scope == scope)\
-                .where(objects_table.c.repo == repo_name)
+                .where(objects_table.c.repo == repo)
         )
         for key, checksum in result:
             checksums[key] = f'{key} ' + (checksum if checksum else 'null')
@@ -231,7 +231,7 @@ async def patch_scope(
                 del checksums[key]
                 continue
             checksums[key] = await create_object(
-                ObjectPath(key=key, scope=scope, repo=repo_name),
+                ObjectPath(key=key, scope=scope, repo=repo),
                 value,
                 extra,
                 username,
@@ -241,7 +241,7 @@ async def patch_scope(
             await conn.execute(
                 sa.delete(objects_table)\
                     .where(objects_table.c.scope == scope)\
-                    .where(objects_table.c.repo == repo_name)\
+                    .where(objects_table.c.repo == repo)\
                     .where(objects_table.c.key.in_(to_delete))
             )
         if checksums:
@@ -253,7 +253,7 @@ async def patch_scope(
             await conn.execute(
                 sa.update(scopes_table)\
                     .where(scopes_table.c.name == scope)\
-                    .where(scopes_table.c.repo == repo_name)\
+                    .where(scopes_table.c.repo == repo)\
                     .values(
                         checksum=checksum,
                         creator=extra.creator,
@@ -278,14 +278,14 @@ async def delete_scope(
             None,
             description='checksum of current scope state',
         ),
-        repo_name: str = Depends(repo_name),
+        repo: str = Depends(repo_name),
         scope: str = Path(...),
 ):
     async with engine.begin() as conn:
         result = await conn.execute(
             sa.delete(scopes_table)\
                 .where(scopes_table.c.name == scope)\
-                .where(scopes_table.c.repo == repo_name)\
+                .where(scopes_table.c.repo == repo)\
                 .where(scopes_table.c.checksum == checksum)
         )
         if result.rowcount == 0:
