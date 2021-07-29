@@ -4,7 +4,7 @@ import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from sdpremote.user import user
+from sdpremote.utils.user import user
 
 
 @pytest.fixture(scope='module')

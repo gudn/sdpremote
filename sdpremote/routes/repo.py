@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Path
 from fastapi.responses import PlainTextResponse
 
 from ..database import engine, repos_table
-from ..user import user
+from ..utils.user import user
 
 router = APIRouter(tags=['repo'])
 

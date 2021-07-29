@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from ..database import engine, storage_table
 from ..storage import uploadObject
-from ..user import user
+from ..utils.user import user
 
 router = APIRouter(tags=['upload'])
 

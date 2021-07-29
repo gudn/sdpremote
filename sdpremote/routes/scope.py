@@ -1,4 +1,3 @@
-import operator
 from enum import Enum
 from datetime import datetime
 from typing import Any, Optional, Union
@@ -10,12 +9,13 @@ from starlette.responses import PlainTextResponse
 
 from ..database import engine, scopes_table, objects_table
 from ..entities.scope import Scope
-from ..user import user
-from ..utils.scope import calc_checksum, set_scope, create_object, ObjectPath, ObjectExtra
+from ..utils.user import user
+from ..utils.checksum import calc_checksum
+from ..utils.object import ObjectData, ObjectExtra, ObjectPath, create_object
+from ..utils.scope import calc_checksum, set_scope
 from .repo import repo_name
 
 router = APIRouter(tags=['scope'])
-_secondGetter = operator.itemgetter(1)
 
 
 class Action(str, Enum):
@@ -33,14 +33,14 @@ class _ScopeBase(BaseModel):
 
 
 class ScopeNew(_ScopeBase):
-    objects: dict[str, Union[int, None]] = Field(
+    objects: dict[str, ObjectData] = Field(
         dict(),
         description='Mapping object key to SID or `null`',
     )
 
 
 class ScopePatch(_ScopeBase):
-    objects: dict[str, Union[int, None, Action]] = Field(
+    objects: dict[str, Union[ObjectData, Action]] = Field(
         dict(),
         description='Mapping object key to SID (for replace/create), `null`'
         '(to set `null`) or to `"delete"` for deleting key',
@@ -110,8 +110,10 @@ async def create_scope(
                 repo,
                 scope,
                 username,
-                creator,  # type: ignore
-                timestamp,  # type: ignore
+                ObjectExtra(
+                    creator=creator,  # type: ignore
+                    timestamp=timestamp,  # type: ignore
+                ),
                 conn,
             )
         await conn.commit()
@@ -154,19 +156,23 @@ async def replace_scope(
         )
         if result.rowcount == 0:
             raise HTTPException(status.HTTP_404_NOT_FOUND)
+
         await conn.execute(
             sa.delete(objects_table)\
                 .where(objects_table.c.scope == scope)\
                 .where(objects_table.c.repo == repo)
         )
+
         if scopeInput.objects:
             await set_scope(
                 scopeInput.objects,
                 repo,
                 scope,
                 username,
-                creator,  # type: ignore
-                timestamp,  # type: ignore
+                ObjectExtra(
+                    creator=creator,  # type: ignore
+                    timestamp=timestamp,  # type: ignore
+                ),
                 conn,
             )
         await conn.commit()
@@ -216,7 +222,9 @@ async def patch_scope(
         )
         if result.rowcount == 0:
             raise HTTPException(status.HTTP_404_NOT_FOUND)
+
         checksums: dict[str, str] = {}
+
         result = await conn.execute(
             sa.select([objects_table.c.key, objects_table.c.checksum])\
                 .where(objects_table.c.scope == scope)\
@@ -224,10 +232,13 @@ async def patch_scope(
         )
         for key, checksum in result:
             checksums[key] = f'{key} ' + (checksum if checksum else 'null')
+
         to_delete: list[str] = []
         for key, value in scopeInput.objects.items():
             if value == Action.delete:
                 to_delete.append(key)
+                if key not in checksums:
+                    raise HTTPException(status.HTTP_404_NOT_FOUND, f'not found object {key}')
                 del checksums[key]
                 continue
             checksums[key] = await create_object(
@@ -244,12 +255,9 @@ async def patch_scope(
                     .where(objects_table.c.repo == repo)\
                     .where(objects_table.c.key.in_(to_delete))
             )
+
         if checksums:
-            checksum = calc_checksum(
-                map(
-                    _secondGetter,
-                    sorted(checksums.items()),
-                ))
+            checksum = calc_checksum(checksums)
             await conn.execute(
                 sa.update(scopes_table)\
                     .where(scopes_table.c.name == scope)\
@@ -260,6 +268,7 @@ async def patch_scope(
                         timestamp=extra.timestamp,
                     )
             )
+
         await conn.commit()
     return 'patched'
 
