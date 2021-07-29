@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 import sqlalchemy as sa
 
@@ -14,7 +14,7 @@ async def set_scope(
         user: str,
         extra: ObjectExtra,
         conn: Any,  # HACK AsyncConnection
-):
+) -> Optional[str]:
     checksums: dict[str, str] = {
         key: await create_object(
             ObjectPath(key=key, scope=scope, repo=repo),
@@ -26,6 +26,7 @@ async def set_scope(
         for key, data in objects.items()
     }
 
+    checksum = None
     if checksums:
         checksum = calc_checksum(checksums)
         await conn.execute(
@@ -34,3 +35,5 @@ async def set_scope(
                 .where(scopes_table.c.repo == repo)\
                 .values(checksum=checksum)
         )
+
+    return checksum

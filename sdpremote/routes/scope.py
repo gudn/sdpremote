@@ -78,7 +78,7 @@ async def list_scopes(
 @router.post(
     '/{user}/{repo}/{scope}',
     status_code=201,
-    response_class=PlainTextResponse,
+    response_model=Scope,
     responses={
         status.HTTP_409_CONFLICT: {
             'description': 'Scope with given name already exists'
@@ -90,7 +90,7 @@ async def create_scope(
         repo: str = Depends(repo_name),
         scope: str = Path(...),
         username: str = Depends(user),
-) -> str:
+) -> Scope:
     timestamp = datetime.utcnow() if scopeInput.objects else None
     creator = scopeInput.use_suffix(username) if scopeInput.objects else None
     async with engine.begin() as conn:
@@ -104,8 +104,10 @@ async def create_scope(
                 ))
         except sa.exc.IntegrityError:
             raise HTTPException(status.HTTP_409_CONFLICT)
+
+        checksum = None
         if scopeInput.objects:
-            await set_scope(
+            checksum = await set_scope(
                 scopeInput.objects,
                 repo,
                 scope,
@@ -117,13 +119,19 @@ async def create_scope(
                 conn,
             )
         await conn.commit()
-    return 'created'
+
+    return Scope(
+        name=scope,
+        checksum=checksum,
+        creator=creator,
+        timestamp=timestamp,
+    )
 
 
 @router.put(
     '/{user}/{repo}/{scope}',
     status_code=status.HTTP_205_RESET_CONTENT,
-    response_class=PlainTextResponse,
+    response_model=Scope,
     responses={
         status.HTTP_404_NOT_FOUND: {
             'description': 'Something is not found or invalid checksum'
@@ -139,7 +147,7 @@ async def replace_scope(
         repo: str = Depends(repo_name),
         scope: str = Path(...),
         username: str = Depends(user),
-):
+) -> Scope:
     timestamp = datetime.utcnow() if scopeInput.objects else None
     creator = scopeInput.use_suffix(username) if scopeInput.objects else None
     async with engine.begin() as conn:
@@ -163,8 +171,9 @@ async def replace_scope(
                 .where(objects_table.c.repo == repo)
         )
 
+        checksum = None
         if scopeInput.objects:
-            await set_scope(
+            checksum = await set_scope(
                 scopeInput.objects,
                 repo,
                 scope,
@@ -176,13 +185,19 @@ async def replace_scope(
                 conn,
             )
         await conn.commit()
-    return 'updated'
+
+    return Scope(
+        name=scope,
+        checksum=checksum,
+        creator=creator,
+        timestamp=timestamp,
+    )
 
 
 @router.patch(
     '/{user}/{repo}/{scope}',
     status_code=status.HTTP_202_ACCEPTED,
-    response_class=PlainTextResponse,
+    response_model=Scope,
     responses={
         status.HTTP_404_NOT_FOUND: {
             'description': 'Something is not found or invalid checksum'
@@ -201,7 +216,7 @@ async def patch_scope(
         repo: str = Depends(repo_name),
         scope: str = Path(...),
         username: str = Depends(user),
-):
+) -> Scope:
     if not scopeInput.objects:
         raise HTTPException(status.HTTP_204_NO_CONTENT)
     extra = ObjectExtra(
@@ -238,7 +253,8 @@ async def patch_scope(
             if value == Action.delete:
                 to_delete.append(key)
                 if key not in checksums:
-                    raise HTTPException(status.HTTP_404_NOT_FOUND, f'not found object {key}')
+                    raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                        f'not found object {key}')
                 del checksums[key]
                 continue
             checksums[key] = await create_object(
@@ -256,6 +272,7 @@ async def patch_scope(
                     .where(objects_table.c.key.in_(to_delete))
             )
 
+        checksum = None
         if checksums:
             checksum = calc_checksum(checksums)
             await conn.execute(
@@ -270,7 +287,13 @@ async def patch_scope(
             )
 
         await conn.commit()
-    return 'patched'
+
+    return Scope(
+        name=scope,
+        checksum=checksum,
+        creator=extra.creator,
+        timestamp=extra.timestamp,
+    )
 
 
 @router.delete(
