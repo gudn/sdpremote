@@ -5,7 +5,7 @@ from typing import Any, Optional, Union
 import sqlalchemy as sa
 from fastapi import HTTPException, status
 
-from ..database import storage_table, objects_table
+from ..database import objects_table, storage_table
 
 
 @dataclass(frozen=True)

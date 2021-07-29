@@ -4,8 +4,8 @@ from sqlalchemy.sql import text
 from . import __version__
 from .config import settings
 from .database import engine
+from .routes import object, repo, scope, upload
 from .storage import SThread
-from .routes import repo, scope, object, upload
 
 settings.validators.validate()  # type: ignore
 app = FastAPI(version=__version__)

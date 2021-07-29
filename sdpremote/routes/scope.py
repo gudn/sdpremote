@@ -1,18 +1,18 @@
-from enum import Enum
 from datetime import datetime
+from enum import Enum
 from typing import Any, Optional, Union
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, Query, Path, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 from starlette.responses import PlainTextResponse
 
-from ..database import engine, scopes_table, objects_table
+from ..database import engine, objects_table, scopes_table
 from ..entities.scope import Scope
-from ..utils.user import user
 from ..utils.checksum import calc_checksum
 from ..utils.object import ObjectData, ObjectExtra, ObjectPath, create_object
 from ..utils.scope import calc_checksum, set_scope
+from ..utils.user import user
 from .repo import repo_name
 
 router = APIRouter(tags=['scope'])
