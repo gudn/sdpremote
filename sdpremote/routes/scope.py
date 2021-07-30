@@ -7,10 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 from starlette.responses import PlainTextResponse
 
-from ..database import engine, metas_table, objects_table, scopes_table
+from ..database import engine, objects_table, scopes_table
 from ..entities.scope import Scope
 from ..utils.checksum import calc_checksum
-from ..utils.meta import MetaData, MetaPath, create_meta
 from ..utils.object import ObjectData, ObjectExtra, ObjectPath, create_object
 from ..utils.scope import calc_checksum, set_scope
 from ..utils.user import user
@@ -21,15 +20,6 @@ router = APIRouter(tags=['scope'])
 
 class Action(str, Enum):
     delete = 'delete'
-
-
-class _NewMetaEntry(BaseModel):
-    object_key: Optional[str]
-    value: MetaData
-
-
-class _MetaEntry(_NewMetaEntry):
-    delete: bool = Field(False)
 
 
 class _ScopeBase(BaseModel):
@@ -47,7 +37,6 @@ class ScopeNew(_ScopeBase):
         dict(),
         description='Mapping object key to SID or `null`',
     )
-    metas: dict[str, _NewMetaEntry]
 
 
 class ScopePatch(_ScopeBase):
@@ -56,7 +45,6 @@ class ScopePatch(_ScopeBase):
         description='Mapping object key to SID (for replace/create), `null`'
         '(to set `null`) or to `"delete"` for deleting key',
     )
-    metas: dict[str, _MetaEntry]
 
 
 @router.get(
@@ -130,20 +118,6 @@ async def create_scope(
                 ),
                 conn,
             )
-
-        for key, meta in scopeInput.metas.items():
-            await create_meta(
-                MetaPath(
-                    key=key,
-                    object_key=meta.object_key,
-                    scope=scope,
-                    repo=repo,
-                ),
-                meta.value,
-                username,
-                conn,
-            )
-
         await conn.commit()
 
     return Scope(
@@ -196,11 +170,6 @@ async def replace_scope(
                 .where(objects_table.c.scope == scope)\
                 .where(objects_table.c.repo == repo)
         )
-        await conn.execute(
-            sa.delete(metas_table)\
-                .where(metas_table.c.scope == scope)\
-                .where(metas_table.c.repo == repo)
-        )
 
         checksum = None
         if scopeInput.objects:
@@ -215,20 +184,6 @@ async def replace_scope(
                 ),
                 conn,
             )
-
-        for key, meta in scopeInput.metas.items():
-            await create_meta(
-                MetaPath(
-                    key=key,
-                    object_key=meta.object_key,
-                    scope=scope,
-                    repo=repo,
-                ),
-                meta.value,
-                username,
-                conn,
-            )
-
         await conn.commit()
 
     return Scope(
@@ -262,119 +217,73 @@ async def patch_scope(
         scope: str = Path(...),
         username: str = Depends(user),
 ) -> Scope:
-    if not scopeInput.objects and not scopeInput.metas:
+    if not scopeInput.objects:
         raise HTTPException(status.HTTP_204_NO_CONTENT)
+    extra = ObjectExtra(
+        creator=scopeInput.use_suffix(username),
+        timestamp=datetime.utcnow(),
+    )
     async with engine.begin() as conn:
-        if scopeInput.objects:
-            extra = ObjectExtra(
-                creator=scopeInput.use_suffix(username),
-                timestamp=datetime.utcnow(),
+        result: Any = await conn.execute(
+            sa.update(scopes_table)\
+                .where(scopes_table.c.name == scope)\
+                .where(scopes_table.c.repo == repo)\
+                .where(scopes_table.c.checksum == checksum)\
+                .values(
+                    timestamp=None,
+                    creator=None,
+                    checksum=None,
+                )
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status.HTTP_404_NOT_FOUND)
+
+        checksums: dict[str, str] = {}
+
+        result = await conn.execute(
+            sa.select([objects_table.c.key, objects_table.c.checksum])\
+                .where(objects_table.c.scope == scope)\
+                .where(objects_table.c.repo == repo)
+        )
+        for key, checksum in result:
+            checksums[key] = f'{key} ' + (checksum if checksum else 'null')
+
+        to_delete: list[str] = []
+        for key, value in scopeInput.objects.items():
+            if value == Action.delete:
+                to_delete.append(key)
+                if key not in checksums:
+                    raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                        f'not found object {key}')
+                del checksums[key]
+                continue
+            checksums[key] = await create_object(
+                ObjectPath(key=key, scope=scope, repo=repo),
+                value,
+                extra,
+                username,
+                conn,
             )
-            result: Any = await conn.execute(
+        if to_delete:
+            await conn.execute(
+                sa.delete(objects_table)\
+                    .where(objects_table.c.scope == scope)\
+                    .where(objects_table.c.repo == repo)\
+                    .where(objects_table.c.key.in_(to_delete))
+            )
+
+        checksum = None
+        if checksums:
+            checksum = calc_checksum(checksums)
+            await conn.execute(
                 sa.update(scopes_table)\
                     .where(scopes_table.c.name == scope)\
                     .where(scopes_table.c.repo == repo)\
-                    .where(scopes_table.c.checksum == checksum)\
                     .values(
-                        timestamp=None,
-                        creator=None,
-                        checksum=None,
+                        checksum=checksum,
+                        creator=extra.creator,
+                        timestamp=extra.timestamp,
                     )
-            )
-            if result.rowcount == 0:
-                raise HTTPException(status.HTTP_404_NOT_FOUND)
-
-            checksums: dict[str, str] = {}
-
-            result = await conn.execute(
-                sa.select([objects_table.c.key, objects_table.c.checksum])\
-                    .where(objects_table.c.scope == scope)\
-                    .where(objects_table.c.repo == repo)
-            )
-            for key, checksum in result:
-                checksums[key] = f'{key} ' + (checksum if checksum else 'null')
-
-            to_delete: list[str] = []
-            for key, value in scopeInput.objects.items():
-                if value == Action.delete:
-                    to_delete.append(key)
-                    if key not in checksums:
-                        raise HTTPException(
-                            status.HTTP_404_NOT_FOUND,
-                            f'not found object {key}',
-                        )
-                    del checksums[key]
-                    continue
-                checksums[key] = await create_object(
-                    ObjectPath(key=key, scope=scope, repo=repo),
-                    value,
-                    extra,
-                    username,
-                    conn,
-                )
-            if to_delete:
-                await conn.execute(
-                    sa.delete(objects_table)\
-                        .where(objects_table.c.scope == scope)\
-                        .where(objects_table.c.repo == repo)\
-                        .where(objects_table.c.key.in_(to_delete))
-                )
-
-            checksum = None
-            if checksums:
-                checksum = calc_checksum(checksums)
-                await conn.execute(
-                    sa.update(scopes_table)\
-                        .where(scopes_table.c.name == scope)\
-                        .where(scopes_table.c.repo == repo)\
-                        .values(
-                            checksum=checksum,
-                            creator=extra.creator,
-                            timestamp=extra.timestamp,
-                        )
-                )
-        else:
-            row = await conn.execute(
-                sa.select([
-                    scopes_table.c.creator,
-                    scopes_table.c.timestamp,
-                    scopes_table.c.checksum,
-                ])\
-                    .where(scopes_table.c.name == scope)\
-                    .where(scopes_table.c.repo == repo)
-            )
-            if row.rowcount == 0:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, 'scope not found')
-            creator, timestamp, checksum = row.one()
-            extra = ObjectExtra(
-                creator=creator,
-                timestamp=timestamp
-            )
-
-        for key, meta in scopeInput.metas.items():
-            if meta.delete:
-                result = await conn.execute(
-                    sa.delete(metas_table)\
-                        .where(metas_table.c.key == key)\
-                        .where(metas_table.c.object_key == meta.object_key)\
-                        .where(metas_table.c.scope == scope)\
-                        .where(metas_table.c.repo == repo)
-                )
-                if not result.rowcount:
-                    raise HTTPException(
-                        status.HTTP_404_NOT_FOUND,
-                        f'meta {key}({meta.object_key}) not found')
-                continue
-            await create_meta(
-                MetaPath(
-                    key=key,
-                    object_key=meta.object_key,
-                    scope=scope,
-                    repo=repo,
-                ),
-                meta.value,
-                username,
-                conn,
             )
 
         await conn.commit()
