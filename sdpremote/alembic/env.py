@@ -1,9 +1,10 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import create_engine, pool
 
 from sdpremote.database import metadata
+from sdpremote.config import settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -37,7 +38,7 @@ def run_migrations_offline():
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = settings['database.uri_sync']
     context.configure(  # type: ignore
         url=url,
         target_metadata=target_metadata,
@@ -57,11 +58,7 @@ def run_migrations_online():
     and associate a connection with the context.
 
     """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    connectable = create_engine(settings['database.uri_sync'])
 
     with connectable.connect() as connection:  # type: ignore
         context.configure(  # type: ignore
