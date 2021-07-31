@@ -1,0 +1,344 @@
+openapi: '3.0.3'
+
+info:
+  title: 'SDP remote'
+  version: '0.74.0'
+  description: |
+    Reference description of Simple Data Protocol
+
+paths:
+  /upload:
+    post:
+      summary: 'Upload new data'
+      description: |
+        Upload new data to storage. This data will be deleted after 6 hours
+        if no objects was referred to it
+      tags: ['upload']
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+              schema:
+                type: object
+                properties:
+                  obj:
+                    description: 'name **MUST** be `obj`'
+                    type: string
+                    format: binary
+      responses:
+        201:
+          description: 'Successful created'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sid:
+                    type: integer
+                    description: 'Storage object id (binded to user)'
+        422:
+          $ref: '#/components/responses/validationError'
+  /{user}/{repo}:
+    get:
+      summary: 'List repos scopes'
+      tags: ['repo', 'scope']
+      parameters:
+      - name: scope
+        in: query
+        description: 'Scope name filter'
+        schema:
+          $ref: '#/components/schemas/scope/properties/name'
+      - name: is_prefix
+        in: query
+        description: 'Is `scope` param is prefix or full name?'
+        schema:
+          type: boolean
+          default: true
+      responses:
+        200:
+          description: 'List of filtered scopes'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/scope'
+        404:
+          description: 'Something not found'
+        422:
+          $ref: '#/components/responses/validationError'
+    post:
+      summary: 'Create a new repo'
+      tags: ['repo']
+      responses:
+        201:
+          description: 'Successful created'
+        409:
+          description: 'Repo with given name already exists'
+    delete:
+      summary: 'Delete a repo'
+      tags: ['repo']
+      responses:
+        200:
+          description: 'Successful deleted'
+        404:
+          description: 'Something not found'
+    parameters:
+    - $ref: '#/components/parameters/user'
+    - $ref: '#/components/parameters/repo'
+  /{user}/{repo}/{scope}:
+    get:
+      tags: ['scope', 'object']
+      summary: 'List scopes objects'
+      parameters:
+      - name: key
+        in: query
+        description: 'Object key filter'
+        schema:
+          $ref: '#/components/schemas/scope/properties/name'
+      - name: is_prefix
+        in: query
+        description: 'Is `key` param is prefix or full name?'
+        schema:
+          type: boolean
+          default: true
+      responses:
+        200:
+          description: 'List of filtered objects'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/object'
+        404:
+          description: 'Something not found'
+        422:
+          $ref: '#/components/responses/validationError'
+    post:
+      summary: 'Replace a new scope with a data'
+      tags: ['scope']
+      requestBody:
+        $ref: '#/components/requestBodies/scopeNew'
+      responses:
+        201:
+          description: 'Successful created'
+        403:
+          description: 'Forbidden to use given SID'
+        404:
+          description: 'Repo not found'
+        409:
+          description: 'Scope with given name already exists'
+        422:
+          $ref: '#/components/responses/validationError'
+    put:
+      summary: 'Replace scope with a new data'
+      tags: ['scope']
+      parameters:
+      - name: checksum
+        in: query
+        required: false
+        description: 'Dont provide this parameter if checksum is `null`'
+        schema:
+          $ref: '#/components/schemas/scope/properties/checksum'
+      requestBody:
+        $ref: '#/components/requestBodies/scopeNew'
+      responses:
+        205:
+          description: 'Successful replaced'
+        403:
+          description: 'Forbidden to use given SID'
+        404:
+          description: 'Something not found or invalid checksum'
+        422:
+          $ref: '#/components/responses/validationError'
+    patch:
+      summary: 'Replace scope with a new data'
+      tags: ['scope']
+      parameters:
+      - name: checksum
+        in: query
+        required: false
+        description: 'Dont provide this parameter if checksum is `null`'
+        schema:
+          $ref: '#/components/schemas/scope/properties/checksum'
+      requestBody:
+        $ref: '#/components/requestBodies/scopePatch'
+      responses:
+        202:
+          description: 'Successful patched'
+        204:
+          description: 'No changes was provided'
+        403:
+          description: 'Forbidden to use given SID'
+        404:
+          description: 'Something not found or invalid checksum'
+        422:
+          $ref: '#/components/responses/validationError'
+    delete:
+      summary: 'Delete a scope'
+      tags: ['scope']
+      parameters:
+      - name: checksum
+        in: query
+        required: false
+        description: 'Dont provide this parameter if checksum is `null`'
+        schema:
+          $ref: '#/components/schemas/scope/properties/checksum'
+      responses:
+        200:
+          description: 'Successful deleted'
+        404:
+          description: 'Something not found or invalid checksum'
+        422:
+          $ref: '#/components/responses/validationError'
+    parameters:
+    - $ref: '#/components/parameters/user'
+    - $ref: '#/components/parameters/repo'
+    - $ref: '#/components/parameters/scope'
+  /{user}/{repo}/{scope}/{key}/data:
+    get:
+      summary: 'Get object data'
+      tags: ['object']
+      responses:
+        204:
+          description: 'Data is null'
+        307:
+          description: 'Redirect to data'
+          headers:
+            location:
+              description: 'Redirect url'
+              schema:
+                type: string
+                format: url
+        404:
+          description: 'Something not found'
+    parameters:
+    - $ref: '#/components/parameters/user'
+    - $ref: '#/components/parameters/repo'
+    - $ref: '#/components/parameters/scope'
+    - $ref: '#/components/parameters/key'
+components:
+  schemas:
+    scope:
+      title: 'Scope'
+      type: object
+      properties:
+        name:
+          type: string
+          pattern: '^[^.\s].*'
+        checksum:
+          $ref: '#/components/schemas/object/properties/checksum'
+        creator:
+          $ref: '#/components/schemas/object/properties/creator'
+        timestamp:
+          $ref: '#/components/schemas/object/properties/timestamp'
+      required: [name, checksum, creator, timestamp]
+    object:
+      title: 'Object'
+      type: object
+      properties:
+        key:
+          type: string
+        checksum:
+          type: string
+          nullable: true
+          minLength: 64
+          maxLength: 64
+        creator:
+          type: string
+          nullable: true
+          example: 'john@john-laptop'
+        timestamp:
+          type: string
+          nullable: true
+          format: 'date-time'
+          example: '1970-01-01T12:00:00.000000'
+      required: [key, checksum, creator, timestamp]
+    validationError:
+      title: 'ValidationError'
+      type: object
+      properties:
+        location:
+          type: array
+          items:
+            type: string
+        msg:
+          type: string
+        type:
+          type: string
+      required: [location, msg, type]
+  responses:
+    validationError:
+      description: 'Validation error'
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                $ref: '#/components/schemas/validationError'
+  parameters:
+    user:
+      name: user
+      in: path
+      required: true
+      schema:
+        type: string
+    repo:
+      name: repo
+      in: path
+      required: true
+      schema:
+        type: string
+    scope:
+      name: scope
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/scope/properties/name'
+    key:
+      name: key
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/object/properties/key'
+  requestBodies:
+    scopeNew:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              objects:
+                type: object
+                additionalProperties:
+                  type: integer
+                  nullable: true
+                  description: 'Data of object: SID from `/upload` or `null`'
+              creatorSuffix:
+                type: string
+                default: ''
+            required: [objects]
+    scopePatch:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              objects:
+                type: object
+                additionalProperties:
+                  oneOf:
+                  - type: integer
+                    nullable: true
+                    description: 'Data of object: SID from `/upload` or `null`'
+                  - type: string
+                    description: 'Action'
+                    enum: ['delete']
+              creatorSuffix:
+                type: string
+                default: ''
+            required: [objects]

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sdpremote"
-version = "0.1.0"
+version = "0.74.0"
 description = "This is simple example implementation of SDP"
 authors = ["gudn <gudnmail@gmail.com>"]
 
