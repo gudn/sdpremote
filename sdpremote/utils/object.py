@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 import sqlalchemy as sa
 from fastapi import HTTPException, status

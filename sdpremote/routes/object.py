@@ -1,9 +1,9 @@
 from datetime import timedelta
-from typing import Optional
+from typing import Optional, Union
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from ..database import engine, objects_table
 from ..entities.object import Object
@@ -52,7 +52,6 @@ async def list_objects(
 
 @router.get(
     '/{user}/{repo}/{scope}/{key}/data',
-    response_class=RedirectResponse,
     responses={
         status.HTTP_204_NO_CONTENT: {
             'description': 'Data is null'
@@ -69,7 +68,7 @@ async def get_data(
         repo: str = Depends(repo_name),
         scope: str = Path(...),
         key: str = Path(...),
-) -> str:
+) -> Union[RedirectResponse, Response]:
     query = sa.select([objects_table.c.data])\
         .where(objects_table.c.key == key)\
         .where(objects_table.c.scope == scope)\
@@ -81,10 +80,10 @@ async def get_data(
     except sa.exc.NoResultFound:  # type: ignore
         raise HTTPException(status.HTTP_404_NOT_FOUND)
     if not sid:
-        raise HTTPException(status.HTTP_204_NO_CONTENT)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     url = storage.presigned_get_object(
         'sdpremote',
         str(sid),
         timedelta(hours=6),
     )
-    return url
+    return RedirectResponse(url)
