@@ -23,7 +23,7 @@ class Action(str, Enum):
 
 
 class _ScopeBase(BaseModel):
-    creator_suffix: str = ''
+    creator_suffix: str = Field('', alias='creatorSuffix')
 
     def use_suffix(self, username: str) -> str:
         suffix = self.creator_suffix.strip()
