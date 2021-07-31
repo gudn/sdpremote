@@ -261,8 +261,10 @@ async def patch_scope(
             if value == Action.delete:
                 to_delete.append(key)
                 if key not in checksums:
-                    raise HTTPException(status.HTTP_404_NOT_FOUND,
-                                        f'not found object {key}')
+                    raise HTTPException(
+                        status.HTTP_404_NOT_FOUND,
+                        f'not found object {key}',
+                    )
                 del checksums[key]
                 continue
             checksums[key] = await create_object(
