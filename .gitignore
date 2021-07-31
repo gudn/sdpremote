@@ -5,3 +5,4 @@ __pycache__/
 .dir-locals.el
 
 .secrets.*
+/dist/

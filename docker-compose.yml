@@ -25,6 +25,20 @@ services:
       MINIO_ROOT_PASSWORD: miniopass
     command: server --console-address ":9001" /data
 
+  sdpremote:
+    build: .
+    ports:
+      - 8000:8000
+    depends_on:
+    - postgres
+    - minio
+    environment:
+      SDP_REMOTE_DATABASE__uri: 'postgresql+asyncpg://postgres:postgres@postgres:5432/sdpremote'
+      SDP_REMOTE_DATABASE__uri_sync: 'postgresql+pg8000://postgres:postgres@postgres:5432/sdpremote'
+      SDP_REMOTE_STORAGE__endpoint: 'minio:9000'
+      SDP_REMOTE_STORAGE__access_key: 'minio'
+      SDP_REMOTE_STORAGE__secret_key: 'miniopass'
+
 volumes:
   postgres_data:
   minio_data:
