@@ -1,10 +1,13 @@
+from datetime import timedelta
 from typing import Optional
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi.responses import RedirectResponse
 
 from ..database import engine, objects_table
 from ..entities.object import Object
+from ..storage import storage
 from .repo import repo_name
 
 router = APIRouter(tags=['object'])
@@ -45,3 +48,43 @@ async def list_objects(
                 (await conn.execute(query)).mappings(),
             ))
     return res
+
+
+@router.get(
+    '/{user}/{repo}/{scope}/{key}/data',
+    response_class=RedirectResponse,
+    responses={
+        status.HTTP_204_NO_CONTENT: {
+            'description': 'Data is null'
+        },
+        status.HTTP_307_TEMPORARY_REDIRECT: {
+            'description': 'Redirect to data'
+        },
+        status.HTTP_404_NOT_FOUND: {
+            'description': 'Something not found'
+        }
+    },
+)
+async def get_data(
+        repo: str = Depends(repo_name),
+        scope: str = Path(...),
+        key: str = Path(...),
+) -> str:
+    query = sa.select([objects_table.c.data])\
+        .where(objects_table.c.key == key)\
+        .where(objects_table.c.scope == scope)\
+        .where(objects_table.c.repo == repo)
+    async with engine.connect() as conn:
+        result = await conn.execute(query)
+    try:
+        sid = result.scalar_one()
+    except sa.exc.NoResultFound:  # type: ignore
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    if not sid:
+        raise HTTPException(status.HTTP_204_NO_CONTENT)
+    url = storage.presigned_get_object(
+        'sdpremote',
+        str(sid),
+        timedelta(hours=6),
+    )
+    return url

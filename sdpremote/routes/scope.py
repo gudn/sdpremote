@@ -83,6 +83,9 @@ async def list_scopes(
         status.HTTP_409_CONFLICT: {
             'description': 'Scope with given name already exists'
         },
+        status.HTTP_404_NOT_FOUND: {
+            'description': 'Something not found'
+        }
     },
 )
 async def create_scope(
@@ -102,8 +105,13 @@ async def create_scope(
                     timestamp=timestamp,
                     creator=creator,
                 ))
-        except sa.exc.IntegrityError:
-            raise HTTPException(status.HTTP_409_CONFLICT)
+        except sa.exc.IntegrityError as e:
+            arg = e.args[0]
+            if 'foreign key' in arg:
+                raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                    'repo not found')
+            else:
+                raise HTTPException(status.HTTP_409_CONFLICT)
 
         checksum = None
         if scopeInput.objects:
